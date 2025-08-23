@@ -25,7 +25,7 @@ class NewsDto(BaseModel):
     mainNewsDto: dict
     newsDtos: List[dict]
 
-@app.post("/analyze", description="뉴스 데이터를 분석하고 요약 결과 반환")
+@app.post("/analyze", description="뉴스 데이터를 분석하고 요약 결과 반환합니다.")
 async def analyze_news(dto: NewsDto):
     """
     plan: free/premium
@@ -41,3 +41,7 @@ async def analyze_news(dto: NewsDto):
             return free_analyze_and_summarize(data)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    
+@app.get("/health", description="FastAPI 서버의 헬스체크 API입니다.")
+async def health_check():
+    return {"status" : "ok"}
