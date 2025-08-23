@@ -1,0 +1,8 @@
+.env
+test.py
+__pycache__
+nocap_lambda
+.venv
+venv
+*.json
+model/

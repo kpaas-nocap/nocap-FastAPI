@@ -1,0 +1,9 @@
+fastapi
+uvicorn[standard]
+pydantic
+python-dotenv
+nltk
+torch>=2.0.0
+transformers>=4.40.0
+sentence-transformers
+openai
