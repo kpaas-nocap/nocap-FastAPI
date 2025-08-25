@@ -1,8 +1,9 @@
 version: '3.9'
 
 services:
-  nocap-FastAPI:
+  nocap-fastapi:
     build: .
+    image: nocap-fastapi:latest
     container_name: fastapi-container
     ports:
       - "80:80"
