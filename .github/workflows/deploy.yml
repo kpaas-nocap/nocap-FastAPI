@@ -29,7 +29,7 @@ jobs:
         username: ${{ secrets.EC2_USER }}
         key: ${{ secrets.EC2_KEY }}
         script: |
-          cd /nocap-FastAPI
+          cd nocap-FastAPI
           git reset --hard           
           git pull origin main
           docker-compose up -d --build
