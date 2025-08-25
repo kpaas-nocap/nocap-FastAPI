@@ -1,0 +1,9 @@
+version: '3.9'
+
+services:
+  nocap-FastAPI:
+    build: .
+    container_name: fastapi-container
+    ports:
+      - "80:80"
+    restart: unless-stopped
