@@ -1,6 +1,6 @@
 fastapi
 uvicorn[standard]
-pydantic
+pydantic>=2.0.0
 python-dotenv
 nltk
 torch>=2.0.0
