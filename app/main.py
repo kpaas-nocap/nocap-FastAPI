@@ -4,8 +4,8 @@ from pydantic import BaseModel
 from typing import List, Optional
 import json
 
-from free_news_similarity_analyzer import free_analyze_and_summarize
-from premium_news_similarity_analyzer import premium_analyze_and_summarize
+from app.free_news_similarity_analyzer import free_analyze_and_summarize
+from app.premium_news_similarity_analyzer import premium_analyze_and_summarize
 
 app = FastAPI(title="뉴스 기사 유사도 분석 및 요약 API", version="1.0.0")
 
