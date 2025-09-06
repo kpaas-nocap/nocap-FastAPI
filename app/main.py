@@ -135,7 +135,7 @@ async def analyze_news(dto: NewsDto):
     """
     try:
         data = dto.dict()
-        if data.get("plan") == "premium":
+        if data.get("plan") == "PREMIUM":
             return premium_analyze_and_summarize(data)
         else:
             return free_analyze_and_summarize(data)
