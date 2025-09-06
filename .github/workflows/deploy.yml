@@ -29,7 +29,12 @@ jobs:
         username: ${{ secrets.EC2_USER }}
         key: ${{ secrets.EC2_KEY }}
         script: |
+          if [ ! -d "nocap-FastAPI" ]; then
+          git clone https://github.com/kpaas-nocap/nocap-FastAPI.git
+          fi
           cd nocap-FastAPI
-          git reset --hard           
-          git pull origin main
+          git fetch --all
+          git reset --hard origin/main
+          docker-compose down
+          docker-compose rm -f
           docker-compose up -d --build
