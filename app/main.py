@@ -24,7 +24,7 @@ class News(BaseModel):
     image: Optional[str] = None
 
 class NewsDto(BaseModel):
-    plan: str = Field(default="free", example = "free")
+    plan: str = Field(default="NORMAL", example = "NORMAL")
     category: Optional[str] = Field(default=None, example="IT/과학") 
     mainNewsDto: News = Field(
         example={
@@ -55,7 +55,7 @@ class NewsDto(BaseModel):
                   "content": {
                       "application/json" :{
                         "examples": {
-                        "free":{
+                        "NORMAL":{
                             "value":{
                             "category": "IT/과학",
                             "mainNewsDto": {
@@ -87,7 +87,7 @@ class NewsDto(BaseModel):
                                 }
                             ]
                         }},
-                        "premium":{
+                        "PREMIUM":{
                             "value":{
                             "category": "IT/과학",
                             "mainNewsDto": {
@@ -128,7 +128,7 @@ class NewsDto(BaseModel):
           })
 async def analyze_news(dto: NewsDto):
     """
-    plan: free/premium
+    plan: NORMAL/PREMIUM
     category: 뉴스 카테고리
     mainNewsDto: 주 뉴스 데이터
     newsDtos: 비교 뉴스 리스트

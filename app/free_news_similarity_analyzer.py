@@ -84,7 +84,7 @@ def free_analyze_and_summarize(dto, threshold=0.5):
     comparison_results.sort(key=lambda x: x["newsWithSimilarityDto"]["similarity"], reverse=True)
 
     return {
-        "category": dto.get("category", "free"),
+        "category": dto.get("category", "NORMAL"),
         "mainNewsDto": main_news,
         "newsComparisonDtos": comparison_results
     }
