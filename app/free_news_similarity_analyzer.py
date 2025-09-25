@@ -125,7 +125,7 @@ def free_analyze_and_summarize(dto, threshold=0.5):
         comparison_results.sort(key=lambda x: x["newsWithSimilarityDto"]["similarity"], reverse=True)
         return {
             "category": dto.get("category", "NORMAL"),
-            "mainNewsDto": {**main_news, "phrases": credible_main},
+            "mainNewsDto": {**main_news, "phrases": credible_main, "content": cleaned_main_content},
             "newsComparisonDtos": comparison_results
         }
 
@@ -143,6 +143,7 @@ def free_analyze_and_summarize(dto, threshold=0.5):
         idx += n
 
     comparison_results = []
+
     for i, article in enumerate(dto.get("newsDtos", [])):
         cleaned_article_content = _clean_content(article.get("content") or "")
         article_sentences = _to_sentences(cleaned_article_content)
@@ -158,7 +159,7 @@ def free_analyze_and_summarize(dto, threshold=0.5):
                     "url": article.get("url", ""),
                     "title": article.get("title", ""),
                     "date": article.get("date", ""),
-                    "content": article.get("content", ""),
+                    "content": cleaned_article_content,
                     "phrases": credible_article
 
                 }
@@ -168,7 +169,8 @@ def free_analyze_and_summarize(dto, threshold=0.5):
     comparison_results.sort(key=lambda x: x["newsWithSimilarityDto"]["similarity"], reverse=True)
 
     return {
-        "category": dto.get("category", "NORMAL"),
-        "mainNewsDto": {**main_news, "phrases": credible_main},
+        "category": dto.get("category"),
+        "plan": dto.get("plan", ""),
+        "mainNewsDto": {**main_news, "phrases": credible_main, "content": cleaned_main_content},
         "newsComparisonDtos": comparison_results
     }
