@@ -2,6 +2,7 @@ import os
 from dotenv import load_dotenv
 from nltk.tokenize import sent_tokenize
 from sentence_transformers import SentenceTransformer, util
+from transformers import AutoTokenizer, AutoModelForTokenClassification, pipeline
 from openai import OpenAI
 
 load_dotenv()
@@ -11,18 +12,44 @@ model = SentenceTransformer("sentence-transformers/paraphrase-multilingual-MiniL
 
 _ = model.encode(["프리로딩 테스트"], convert_to_tensor=True)
 
+# 한국어 NER 파이프라인 (Leo97/KoELECTRA-small-v3-modu-ner)
+ner_model_name = "Leo97/KoELECTRA-small-v3-modu-ner"
+tokenizer = AutoTokenizer.from_pretrained(ner_model_name)
+ner_model = AutoModelForTokenClassification.from_pretrained(ner_model_name)
+
+ner_pipeline = pipeline(
+    "token-classification",
+    model=ner_model,
+    tokenizer=tokenizer,
+    aggregation_strategy="simple"
+)
+
 # 빈값/공백/None 방어 함수
 def _to_sentences(text: str):
     if not isinstance(text, str):
         return []
-    
-    # 제로폭공백 등 제거 후 트림
+
     cleaned = text.replace("\u200b", "").strip()
     if not cleaned:
         return []
-    
-    # 공백 문장 제거
+
     return [s.strip() for s in sent_tokenize(cleaned) if s.strip()]
+
+# 신뢰 구문 추출
+def extract_credible_phrases(sentences):
+    credible_phrases = []
+    keywords = ["연구", "보고서", "발표", "통계", "조사", "전문가", "기관", "정부", "장관", "교수"]
+
+    for sent in sentences:
+        entities = ner_pipeline(sent)
+        has_org_or_person = any(e['entity_group'] in ["ORG", "PER"] for e in entities)
+        has_number = any(e['entity_group'] == "NUM" or e['word'].isdigit() for e in entities)
+        has_keyword = any(k in sent for k in keywords)
+
+        if has_org_or_person or has_number or has_keyword:
+            credible_phrases.append(sent)
+
+    return credible_phrases
 
 # 기사 본문 비었을 경우 유사도를 0.0으로 처리
 def _similarity_from_sentences(main_embeddings, article_sentences):
@@ -70,6 +97,7 @@ def generate_comparative_summary(main_content, compare_content):
 def premium_analyze_and_summarize(dto, threshold=0.5):
     main_news = dto.get("mainNewsDto", {})
     main_sentences = _to_sentences((main_news.get("content") or ""))
+    credible_main = extract_credible_phrases(main_sentences)
     
     if not main_sentences:
         comparison_results = []
@@ -80,6 +108,8 @@ def premium_analyze_and_summarize(dto, threshold=0.5):
                     "newsDto": {
                         "url": article.get("url", ""),
                         "title": article.get("title", ""),
+                        "date": article.get("date", ""),
+                        "phrases": [],
                         "content": article.get("content", "")
                     }
                 },
@@ -88,7 +118,7 @@ def premium_analyze_and_summarize(dto, threshold=0.5):
         comparison_results.sort(key=lambda x: x["newsWithSimilarityDto"]["similarity"], reverse=True)
         return {
             "category": dto.get("category", ""),
-            "mainNewsDto": main_news,
+            "mainNewsDto": {**main_news, "phrases": credible_main},
             "newsComparisonDtos": comparison_results
         }
 
@@ -97,7 +127,8 @@ def premium_analyze_and_summarize(dto, threshold=0.5):
     comparison_results = []
 
     for article in dto.get("newsDtos", []):
-        article_sentences = _to_sentences((article.get("content") or ""))  
+        article_sentences = _to_sentences((article.get("content") or ""))
+        credible_article = extract_credible_phrases(article_sentences)
         similarity = _similarity_from_sentences(main_embeddings, article_sentences)
 
         # GPT 비교 요약은 유사도 0.5 이상일 때만 실행
@@ -116,7 +147,9 @@ def premium_analyze_and_summarize(dto, threshold=0.5):
                 "newsDto": {
                     "url": article.get("url", ""),
                     "title": article.get("title", ""),
-                    "content": article.get("content", "")
+                    "date": article.get("date", ""),
+                    "content": article.get("content", ""),
+                    "phrases": credible_article
                 }
             },
             "comparison": comparison_text
@@ -126,6 +159,6 @@ def premium_analyze_and_summarize(dto, threshold=0.5):
 
     return {
         "category": dto.get("category", "PREMIUM"),
-        "mainNewsDto": main_news,
+        "mainNewsDto": {**main_news, "phrases": credible_main},
         "newsComparisonDtos": comparison_results
     }
