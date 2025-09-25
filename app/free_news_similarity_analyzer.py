@@ -143,6 +143,7 @@ def free_analyze_and_summarize(dto, threshold=0.5):
         idx += n
 
     comparison_results = []
+
     for i, article in enumerate(dto.get("newsDtos", [])):
         cleaned_article_content = _clean_content(article.get("content") or "")
         article_sentences = _to_sentences(cleaned_article_content)
