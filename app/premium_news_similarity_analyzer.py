@@ -148,8 +148,8 @@ def premium_analyze_and_summarize(dto, threshold=0.5):
                     "url": article.get("url", ""),
                     "title": article.get("title", ""),
                     "date": article.get("date", ""),
-                    "phrases": credible_article,
-                    "content": article.get("content", "")
+                    "content": article.get("content", ""),
+                    "phrases": credible_article
                 }
             },
             "comparison": comparison_text
