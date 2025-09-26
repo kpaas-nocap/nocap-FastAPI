@@ -1,35 +1,47 @@
-name: nocap-FastAPI CI/CD
-
+name: NOCAP-FASTAPI CI/CD
 on:
   push:
     branches: [ main ]
-
 jobs:
-  deploy:
+  build-and-deploy:
     runs-on: ubuntu-latest
-
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: "3.11"
+      - name: Docker login NCR
+        run: |
+          echo "${{ secrets.NCR_PASSWORD }}" | docker login ${{ secrets.NCR_REGISTRY }} -u "${{ secrets.NCR_USERNAME }}" --password-stdin
 
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
+      - name: Build and push
+        run: |
+          IMAGE=${{ secrets.NCR_REGISTRY }}/${{ secrets.NCR_REPO_FASTAPI }}
+          docker build -t $IMAGE:latest -t $IMAGE:${{ github.sha }} .
+          docker push $IMAGE:latest
+          docker push $IMAGE:${{ github.sha }}
 
-    - name: Deploy to EC2 via SSH
-      uses: appleboy/ssh-action@v0.1.9
-      with:
-        host: ${{ secrets.EC2_HOST }}
-        username: ${{ secrets.EC2_USER }}
-        key: ${{ secrets.EC2_KEY }}
-        script: |
-          cd nocap-FastAPI
-          git pull origin main
-          docker rm -f fastapi-container
-          docker-compose up -d --build
+      - uses: azure/setup-kubectl@v4
+
+      - name: Write kubeconfig
+        run: |
+          mkdir -p $HOME/.kube
+          echo "${{ secrets.KUBE_CONFIG }}" > $HOME/.kube/config
+
+      - name: Ensure namespace and imagePullSecret
+        run: |
+          kubectl create namespace nocap --dry-run=client -o yaml | kubectl apply -f -
+          kubectl -n nocap delete secret ncr-cred --ignore-not-found
+          kubectl -n nocap create secret docker-registry ncr-cred \
+            --docker-server=${{ secrets.NCR_REGISTRY }} \
+            --docker-username=${{ secrets.NCR_USERNAME }} \
+            --docker-password=${{ secrets.NCR_PASSWORD }}
+
+      - name: Apply FastAPI manifests
+        run: |
+          kubectl apply -f k8s/fastapi-service.yaml
+          kubectl apply -f k8s/fastapi-deployment.yaml
+
+      - name: Rollout FastAPI
+        run: |
+          IMAGE=${{ secrets.NCR_REGISTRY }}/${{ secrets.NCR_REPO_FASTAPI }}:${{ github.sha }}
+          kubectl -n nocap set image deploy/nocap-fastapi nocap-fastapi=$IMAGE
+          kubectl -n nocap rollout status deploy/nocap-fastapi --timeout=300s
