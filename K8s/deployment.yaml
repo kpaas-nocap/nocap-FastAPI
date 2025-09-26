@@ -5,6 +5,7 @@ metadata:
   namespace: nocap
 spec:
   replicas: 1
+  revisionHistoryLimit: 2
   strategy:
     type: RollingUpdate
     rollingUpdate:
@@ -24,6 +25,7 @@ spec:
       containers:
         - name: nocap-fastapi
           image: no-cap.kr.ncr.ntruss.com/nocap-fastapi:latest
+          imagePullPolicy: Always
           ports:
             - containerPort: 80
           env:
@@ -42,19 +44,16 @@ spec:
               memory: "256Mi"
               ephemeral-storage: "512Mi"
           startupProbe:
-            tcpSocket:
-              port: 80
+            tcpSocket: { port: 80 }
             failureThreshold: 30
             periodSeconds: 3
           readinessProbe:
-            tcpSocket:
-              port: 80
-            initialDelaySeconds: 10
+            tcpSocket: { port: 80 }
+            initialDelaySeconds: 20
             periodSeconds: 5
-            failureThreshold: 12
+            failureThreshold: 30
           livenessProbe:
-            tcpSocket:
-              port: 80
-            initialDelaySeconds: 30
+            tcpSocket: { port: 80 }
+            initialDelaySeconds: 40
             periodSeconds: 10
             failureThreshold: 3
