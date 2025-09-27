@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: nocap-fastapi
+  namespace: nocap
+spec:
+  type: ClusterIP
+  selector:
+    app: nocap-fastapi
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
