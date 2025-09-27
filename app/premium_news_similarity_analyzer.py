@@ -1,11 +1,10 @@
-import os
+import os, html, re
 from dotenv import load_dotenv
 from nltk.tokenize import sent_tokenize
 from sentence_transformers import SentenceTransformer, util
 from transformers import AutoTokenizer, AutoModelForTokenClassification, pipeline
 from openai import OpenAI
-from transformers import AutoTokenizer, AutoModelForTokenClassification, pipeline
-import re
+
 
 load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -77,21 +76,35 @@ def _to_sentences(text: str):
 
     return [s.strip() for s in sent_tokenize(cleaned) if s.strip()]
 
+# HTML 태그 제거 함수
+def strip_html_tags(text: str) -> str:
+    text = re.sub(r'<.*?>', '', text)
+    return html.unescape(text)
+
 # NER
-def extract_credible_phrases(sentences):
-    credible_phrases = []
+def extract_credible_phrases(sentences, max_phrases=5):
+    results = []
     keywords = ["연구", "보고서", "발표", "통계", "조사", "전문가", "기관", "정부", "장관", "교수"]
 
     for sent in sentences:
         entities = ner_pipeline(sent)
-        has_org_or_person = any(e['entity_group'] in ["ORG", "PER"] for e in entities)
-        has_number = any(e['entity_group'] == "NUM" or e['word'].isdigit() for e in entities)
-        has_keyword = any(k in sent for k in keywords)
 
-        if has_org_or_person or has_number or has_keyword:
-            credible_phrases.append(sent)
+        # 가중치 계산
+        score = 0
+        if any(e['entity_group'] in ["ORG", "PER"] for e in entities):
+            score += 2
+        if any(e['entity_group'] == "NUM" or e['word'].isdigit() for e in entities):
+            score += 1
+        if any(k in sent for k in keywords):
+            score += 1
 
-    return credible_phrases
+        if score > 0:
+            results.append((strip_html_tags(sent), score))
+
+    top_phrases = [phrase for phrase, _ in sorted(results, key=lambda x: x[1], reverse=True)[:max_phrases]]
+
+    return top_phrases
+
 
 # 기사 본문 비었을 경우 유사도를 0.0으로 처리
 def _similarity_from_sentences(main_embeddings, article_embeddings):
