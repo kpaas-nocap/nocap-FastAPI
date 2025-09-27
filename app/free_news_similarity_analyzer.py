@@ -1,7 +1,7 @@
 from nltk.tokenize import sent_tokenize
 from sentence_transformers import SentenceTransformer, util
 from transformers import AutoTokenizer, AutoModelForTokenClassification, pipeline
-import re
+import re, html
 
 
 model = SentenceTransformer("sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
@@ -71,21 +71,35 @@ def _to_sentences(text: str):
     
     return [s.strip() for s in sent_tokenize(cleaned) if s.strip()]
 
+# HTML 태그 제거 함수
+def strip_html_tags(text: str) -> str:
+    text = re.sub(r'<.*?>', '', text)
+    return html.unescape(text)
+
 # NER
-def extract_credible_phrases(sentences):
-    credible_phrases = []
+def extract_credible_phrases(sentences, max_phrases=5):
+    results = []
     keywords = ["연구", "보고서", "발표", "통계", "조사", "전문가", "기관", "정부", "장관", "교수"]
 
     for sent in sentences:
         entities = ner_pipeline(sent)
-        has_org_or_person = any(e['entity_group'] in ["ORG", "PER"] for e in entities)
-        has_number = any(e['entity_group'] == "NUM" or e['word'].isdigit() for e in entities)
-        has_keyword = any(k in sent for k in keywords)
 
-        if has_org_or_person or has_number or has_keyword:
-            credible_phrases.append(sent)
+        # 가중치 계산
+        score = 0
+        if any(e['entity_group'] in ["ORG", "PER"] for e in entities):
+            score += 2
+        if any(e['entity_group'] == "NUM" or e['word'].isdigit() for e in entities):
+            score += 1
+        if any(k in sent for k in keywords):
+            score += 1
 
-    return credible_phrases
+        if score > 0:
+            results.append((strip_html_tags(sent), score))
+
+    top_phrases = [phrase for phrase, _ in sorted(results, key=lambda x: x[1], reverse=True)[:max_phrases]]
+
+    return top_phrases
+
 
 # 코사인 유사도 계산
 def _similarity_from_embeddings(main_embeddings, article_embeddings):
