@@ -11,7 +11,7 @@ spec:
     rollingUpdate:
       maxUnavailable: 1
       maxSurge: 0
-  progressDeadlineSeconds: 600
+  progressDeadlineSeconds: 1800
   selector:
     matchLabels:
       app: nocap-fastapi
@@ -20,6 +20,7 @@ spec:
       labels:
         app: nocap-fastapi
     spec:
+      terminationGracePeriodSeconds: 60
       imagePullSecrets:
         - name: ncr-cred
       containers:
@@ -36,24 +37,30 @@ spec:
                   key: OPENAI_API_KEY
           resources:
             requests:
-              cpu: "100m"
-              memory: "256Mi"
+              cpu: "200m"
+              memory: "512Mi"
               ephemeral-storage: "512Mi"
             limits:
-              cpu: "100m"
-              memory: "256Mi"
+              cpu: "500m"
+              memory: "1Gi"
               ephemeral-storage: "512Mi"
           startupProbe:
-            tcpSocket: { port: 80 }
-            failureThreshold: 30
-            periodSeconds: 3
+            tcpSocket:
+              port: 80
+            timeoutSeconds: 3
+            periodSeconds: 5
+            failureThreshold: 120
           readinessProbe:
-            tcpSocket: { port: 80 }
-            initialDelaySeconds: 20
+            tcpSocket:
+              port: 80
+            initialDelaySeconds: 25
+            timeoutSeconds: 3
             periodSeconds: 5
             failureThreshold: 30
           livenessProbe:
-            tcpSocket: { port: 80 }
-            initialDelaySeconds: 40
+            tcpSocket:
+              port: 80
+            initialDelaySeconds: 120
+            timeoutSeconds: 3
             periodSeconds: 10
             failureThreshold: 3
