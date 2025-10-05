@@ -23,6 +23,8 @@ spec:
       terminationGracePeriodSeconds: 60
       imagePullSecrets:
         - name: ncr-cred
+      securityContext:
+        fsGroup: 0
       containers:
         - name: nocap-fastapi
           image: no-cap.kr.ncr.ntruss.com/nocap-fastapi:latest
@@ -43,15 +45,24 @@ spec:
               value: "false"
             - name: PYTHONUNBUFFERED
               value: "1"
+            - name: TRANSFORMERS_CACHE
+              value: /root/.cache/huggingface
+            - name: HF_HOME
+              value: /root/.cache/huggingface
+            - name: HUGGINGFACE_HUB_CACHE
+              value: /root/.cache/huggingface
           resources:
             requests:
               cpu: "200m"
               memory: "512Mi"
-              ephemeral-storage: "512Mi"
+              ephemeral-storage: "256Mi"
             limits:
               cpu: "500m"
               memory: "2Gi"
               ephemeral-storage: "512Mi"
+          volumeMounts:
+            - name: hf-models
+              mountPath: /root/.cache/huggingface
           startupProbe:
             tcpSocket:
               port: 80
@@ -72,3 +83,7 @@ spec:
             timeoutSeconds: 3
             periodSeconds: 10
             failureThreshold: 3
+      volumes:
+        - name: hf-models
+          persistentVolumeClaim:
+            claimName: huggingface-pvc
