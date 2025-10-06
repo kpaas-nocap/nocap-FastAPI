@@ -9,8 +9,8 @@ spec:
   strategy:
     type: RollingUpdate
     rollingUpdate:
-      maxUnavailable: 0
-      maxSurge: 1
+      maxUnavailable: 1
+      maxSurge: 0
   progressDeadlineSeconds: 1800
   selector:
     matchLabels:
@@ -29,8 +29,10 @@ spec:
         - name: nocap-fastapi
           image: no-cap.kr.ncr.ntruss.com/nocap-fastapi:latest
           imagePullPolicy: Always
+          command: ["python","-m","uvicorn"]
+          args: ["app.main:app","--host","0.0.0.0","--port","8000","--workers","1"]
           ports:
-            - containerPort: 80
+            - containerPort: 8000
           env:
             - name: OPENAI_API_KEY
               valueFrom:
@@ -65,21 +67,21 @@ spec:
               mountPath: /root/.cache/huggingface
           startupProbe:
             tcpSocket:
-              port: 80
+              port: 8000
             timeoutSeconds: 3
             periodSeconds: 5
             failureThreshold: 120
           readinessProbe:
             tcpSocket:
-              port: 80
-            initialDelaySeconds: 25
+              port: 8000
+            initialDelaySeconds: 10
             timeoutSeconds: 3
             periodSeconds: 5
             failureThreshold: 30
           livenessProbe:
             tcpSocket:
-              port: 80
-            initialDelaySeconds: 120
+              port: 8000
+            initialDelaySeconds: 60
             timeoutSeconds: 3
             periodSeconds: 10
             failureThreshold: 3
