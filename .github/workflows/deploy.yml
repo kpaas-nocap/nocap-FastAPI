@@ -34,17 +34,24 @@ jobs:
             --docker-server=${{ secrets.NCR_REGISTRY }} \
             --docker-username=${{ secrets.NCR_USERNAME }} \
             --docker-password=${{ secrets.NCR_PASSWORD }}
-      - name: Apply PVC
+
+      - name: Apply PV/PVC
         run: |
-          kubectl -n nocap apply -f K8s/nocap-model-pvc.yaml
+          kubectl apply -f K8s/huggingface-pv.yaml
+          kubectl apply -f K8s/huggingface-pvc.yaml
+
       - name: Wait for PVC
         run: |
           for i in {1..30}; do
-            PHASE=$(kubectl -n nocap get pvc nocap-model-pvc -o jsonpath='{.status.phase}' || true)
+            PHASE=$(kubectl -n nocap get pvc huggingface-pvc -o jsonpath='{.status.phase}' 2>/dev/null || true)
+            echo "PVC phase: ${PHASE:-<none>}"
             [ "$PHASE" = "Bound" ] && exit 0
             sleep 5
           done
+          kubectl -n nocap describe pvc huggingface-pvc || true
+          kubectl describe pv huggingface-pv || true
           exit 1
+
       - name: Apply FastAPI manifests
         run: |
           kubectl apply -f K8s/service.yaml
