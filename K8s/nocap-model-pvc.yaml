@@ -1,13 +1,13 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: huggingface-pvc
+  name: nocap-model-pvc
   namespace: nocap
 spec:
   accessModes:
-    - ReadWriteMany
+    - ReadWriteOnce
   resources:
     requests:
       storage: 50Gi
-  volumeName: huggingface-pv
-  storageClassName: ""
+  volumeName: nocap-model-pvc
+  storageClassName: nks-block-storage
