@@ -37,8 +37,6 @@ spec:
                 secretKeyRef:
                   name: app-secrets
                   key: OPENAI_API_KEY
-            - name: MODELS_PATH
-              value: "/app/models"
             - name: OMP_NUM_THREADS
               value: "1"
             - name: MKL_NUM_THREADS
@@ -47,6 +45,12 @@ spec:
               value: "false"
             - name: PYTHONUNBUFFERED
               value: "1"
+            - name: TRANSFORMERS_CACHE
+              value: /root/.cache/huggingface
+            - name: HF_HOME
+              value: /root/.cache/huggingface
+            - name: HUGGINGFACE_HUB_CACHE
+              value: /root/.cache/huggingface
           resources:
             requests:
               cpu: "200m"
@@ -58,7 +62,7 @@ spec:
               ephemeral-storage: "512Mi"
           volumeMounts:
             - name: hf-models
-              mountPath: /app/models
+              mountPath: /root/.cache/huggingface
           startupProbe:
             tcpSocket:
               port: 80
@@ -82,4 +86,4 @@ spec:
       volumes:
         - name: hf-models
           persistentVolumeClaim:
-            claimName: nocap-model-pvc
+            claimName: huggingface-pvc

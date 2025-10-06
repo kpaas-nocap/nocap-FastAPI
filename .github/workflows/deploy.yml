@@ -35,7 +35,6 @@ jobs:
             --docker-username=${{ secrets.NCR_USERNAME }} \
             --docker-password=${{ secrets.NCR_PASSWORD }}
 
-
       - name: Apply PV/PVC
         run: |
           kubectl apply -f K8s/huggingface-pv.yaml
