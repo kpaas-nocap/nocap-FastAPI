@@ -39,8 +39,7 @@ jobs:
       # === 스토리지(PVC) 먼저 적용 ===
       - name: Apply PVC
         run: |
-          kubectl apply -n "$NAMESPACE" -f /mnt/data/nocap-model-pvc.yaml
-          # PVC Bound 대기
+          kubectl apply -n "$NAMESPACE" -f K8s/nocap-model-pvc.yaml
           for i in {1..60}; do
             phase=$(kubectl get pvc nocap-model-pvc -n "$NAMESPACE" -o jsonpath='{.status.phase}' 2>/dev/null || echo "Pending")
             echo "PVC phase: $phase"
