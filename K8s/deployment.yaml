@@ -3,14 +3,16 @@ kind: Deployment
 metadata:
   name: nocap-fastapi
   namespace: nocap
+  labels:
+    app: nocap-fastapi
 spec:
   replicas: 1
   revisionHistoryLimit: 2
   strategy:
     type: RollingUpdate
     rollingUpdate:
-      maxUnavailable: 1
-      maxSurge: 0
+      maxUnavailable: 0
+      maxSurge: 1
   progressDeadlineSeconds: 1800
   selector:
     matchLabels:
@@ -24,21 +26,23 @@ spec:
       imagePullSecrets:
         - name: ncr-cred
       securityContext:
-        fsGroup: 0
+        runAsNonRoot: true
+        runAsUser: 10001
+        fsGroup: 10001
       containers:
         - name: nocap-fastapi
           image: no-cap.kr.ncr.ntruss.com/nocap-fastapi:latest
-          imagePullPolicy: Always
-          command: ["python","-m","uvicorn"]
-          args: ["app.main:app","--host","0.0.0.0","--port","8000","--workers","1"]
+          imagePullPolicy: IfNotPresent
           ports:
-            - containerPort: 8000
+            - containerPort: 80
           env:
             - name: OPENAI_API_KEY
               valueFrom:
                 secretKeyRef:
                   name: app-secrets
                   key: OPENAI_API_KEY
+            - name: MODELS_PATH
+              value: "/app/models"
             - name: OMP_NUM_THREADS
               value: "1"
             - name: MKL_NUM_THREADS
@@ -47,12 +51,6 @@ spec:
               value: "false"
             - name: PYTHONUNBUFFERED
               value: "1"
-            - name: TRANSFORMERS_CACHE
-              value: /root/.cache/huggingface
-            - name: HF_HOME
-              value: /root/.cache/huggingface
-            - name: HUGGINGFACE_HUB_CACHE
-              value: /root/.cache/huggingface
           resources:
             requests:
               cpu: "200m"
@@ -64,28 +62,28 @@ spec:
               ephemeral-storage: "512Mi"
           volumeMounts:
             - name: hf-models
-              mountPath: /root/.cache/huggingface
+              mountPath: /app/models
           startupProbe:
             tcpSocket:
-              port: 8000
+              port: 80
             timeoutSeconds: 3
             periodSeconds: 5
             failureThreshold: 120
           readinessProbe:
             tcpSocket:
-              port: 8000
-            initialDelaySeconds: 10
+              port: 80
+            initialDelaySeconds: 25
             timeoutSeconds: 3
             periodSeconds: 5
             failureThreshold: 30
           livenessProbe:
             tcpSocket:
-              port: 8000
-            initialDelaySeconds: 60
+              port: 80
+            initialDelaySeconds: 120
             timeoutSeconds: 3
             periodSeconds: 10
             failureThreshold: 3
       volumes:
         - name: hf-models
           persistentVolumeClaim:
-            claimName: huggingface-pvc
+            claimName: nocap-model-pvc

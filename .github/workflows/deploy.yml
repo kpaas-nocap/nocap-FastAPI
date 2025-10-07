@@ -8,57 +8,51 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Docker login NCR
-        run: |
-          echo "${{ secrets.NCR_PASSWORD }}" | docker login ${{ secrets.NCR_REGISTRY }} -u "${{ secrets.NCR_USERNAME }}" --password-stdin
-
-      - name: Build and push
-        run: |
-          IMAGE=${{ secrets.NCR_REGISTRY }}/${{ secrets.NCR_REPO_FASTAPI }}
-          docker build -t $IMAGE:latest -t $IMAGE:${{ github.sha }} .
-          docker push $IMAGE:latest
-          docker push $IMAGE:${{ github.sha }}
-
-      - uses: azure/setup-kubectl@v4
-
-      - name: Write kubeconfig
+      # === kubectl 연결 설정 ===
+      - name: Configure kubeconfig
         run: |
           mkdir -p $HOME/.kube
           echo "${{ secrets.KUBE_CONFIG }}" > $HOME/.kube/config
+          chmod 600 $HOME/.kube/config
+          kubectl version --client
+          kubectl cluster-info
 
-      - name: Ensure namespace and imagePullSecret
+      - name: Ensure namespace
         run: |
-          kubectl create namespace nocap --dry-run=client -o yaml | kubectl apply -f -
-          kubectl -n nocap delete secret ncr-cred --ignore-not-found
-          kubectl -n nocap create secret docker-registry ncr-cred \
-            --docker-server=${{ secrets.NCR_REGISTRY }} \
-            --docker-username=${{ secrets.NCR_USERNAME }} \
-            --docker-password=${{ secrets.NCR_PASSWORD }}
+          kubectl get ns "$NAMESPACE" >/dev/null 2>&1 || kubectl create ns "$NAMESPACE"
 
-      - name: Apply PV/PVC
+      # === 컨테이너 이미지 빌드/푸시 ===
+      - name: Registry login
         run: |
-          kubectl apply -f K8s/huggingface-pv.yaml
-          kubectl apply -f K8s/huggingface-pvc.yaml
+          echo "${{ secrets.NCR_PASSWORD }}" | docker login "${{ secrets.NCR_REGISTRY }}" -u "${{ secrets.NCR_USERNAME }}" --password-stdin
 
-      - name: Wait for PVC
+      - name: Build & Push (sha + latest)
         run: |
-          for i in {1..30}; do
-            PHASE=$(kubectl -n nocap get pvc huggingface-pvc -o jsonpath='{.status.phase}' 2>/dev/null || true)
-            echo "PVC phase: ${PHASE:-<none>}"
-            [ "$PHASE" = "Bound" ] && exit 0
+          docker build -t "$IMAGE:${{ github.sha }}" -t "$IMAGE:latest" .
+          docker push "$IMAGE:${{ github.sha }}"
+          docker push "$IMAGE:latest"
+
+      # === 스토리지(PVC) 먼저 적용 ===
+      - name: Apply PVC
+        run: |
+          kubectl apply -n "$NAMESPACE" -f /mnt/data/nocap-model-pvc.yaml
+          # PVC Bound 대기
+          for i in {1..60}; do
+            phase=$(kubectl get pvc nocap-model-pvc -n "$NAMESPACE" -o jsonpath='{.status.phase}' 2>/dev/null || echo "Pending")
+            echo "PVC phase: $phase"
+            [ "$phase" = "Bound" ] && break
             sleep 5
           done
-          kubectl -n nocap describe pvc huggingface-pvc || true
-          kubectl describe pv huggingface-pv || true
-          exit 1
+          [ "$phase" = "Bound" ] || (echo "PVC not Bound" && exit 1)
 
-      - name: Apply FastAPI manifests
+      # === 서비스/디플로이먼트 적용 ===
+      - name: Apply manifests
         run: |
-          kubectl apply -f K8s/service.yaml
-          kubectl apply -f K8s/deployment.yaml
+          kubectl apply -n "$NAMESPACE" -f /mnt/data/service.yaml
+          kubectl apply -n "$NAMESPACE" -f /mnt/data/deployment.yaml
 
-      - name: Rollout FastAPI
+      # === 최신 이미지로 롤아웃 ===
+      - name: Set image & rollout
         run: |
-          IMAGE=${{ secrets.NCR_REGISTRY }}/${{ secrets.NCR_REPO_FASTAPI }}:${{ github.sha }}
-          kubectl -n nocap set image deploy/nocap-fastapi nocap-fastapi=$IMAGE
-          kubectl -n nocap rollout status deploy/nocap-fastapi --timeout=300s
+          kubectl -n "$NAMESPACE" set image deploy/"$DEPLOYMENT" "$DEPLOYMENT"="$IMAGE:${{ github.sha }}"
+          kubectl -n "$NAMESPACE" rollout status deploy/"$DEPLOYMENT" --timeout=600s
