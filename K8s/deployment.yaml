@@ -3,6 +3,8 @@ kind: Deployment
 metadata:
   name: nocap-fastapi
   namespace: nocap
+  labels:
+    app: nocap-fastapi
 spec:
   replicas: 1
   revisionHistoryLimit: 2
@@ -24,11 +26,13 @@ spec:
       imagePullSecrets:
         - name: ncr-cred
       securityContext:
-        fsGroup: 0
+        runAsNonRoot: true
+        runAsUser: 10001
+        fsGroup: 10001
       containers:
         - name: nocap-fastapi
           image: no-cap.kr.ncr.ntruss.com/nocap-fastapi:latest
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 80
           env:

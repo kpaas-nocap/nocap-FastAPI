@@ -9,5 +9,4 @@ spec:
   resources:
     requests:
       storage: 50Gi
-  volumeName: nocap-model-pvc
   storageClassName: nks-block-storage
