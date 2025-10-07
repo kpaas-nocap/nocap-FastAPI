@@ -5,6 +5,10 @@ on:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+    env:
+      IMAGE: ${{ secrets.NCR_REGISTRY }}/${{ secrets.NCR_REPO_FASTAPI }}
+      NAMESPACE: nocap
+      DEPLOYMENT: nocap-fastapi
     steps:
       - uses: actions/checkout@v4
 
