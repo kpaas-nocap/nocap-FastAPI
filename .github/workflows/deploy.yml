@@ -12,50 +12,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # === kubectl 연결 설정 ===
-      - name: Configure kubeconfig
+      - name: Docker login (NCR)
         run: |
-          mkdir -p $HOME/.kube
-          echo "${{ secrets.KUBE_CONFIG }}" > $HOME/.kube/config
-          chmod 600 $HOME/.kube/config
-          kubectl version --client
-          kubectl cluster-info
+          echo "${{ secrets.NCR_PASSWORD }}" | docker login \
+            ${{ secrets.NCR_REGISTRY }} \
+            -u "${{ secrets.NCR_USERNAME }}" --password-stdin
 
-      - name: Ensure namespace
+      - name: Build & push FastAPI image
         run: |
-          kubectl get ns "$NAMESPACE" >/dev/null 2>&1 || kubectl create ns "$NAMESPACE"
+          set -euxo pipefail
+          docker build -t $IMAGE_FASTAPI:latest .
+          docker push $IMAGE_FASTAPI:latest
 
-      # === 컨테이너 이미지 빌드/푸시 ===
-      - name: Registry login
+      - name: Print pushed image tags
         run: |
-          echo "${{ secrets.NCR_PASSWORD }}" | docker login "${{ secrets.NCR_REGISTRY }}" -u "${{ secrets.NCR_USERNAME }}" --password-stdin
-
-      - name: Build & Push (sha + latest)
-        run: |
-          docker build -t "$IMAGE:${{ github.sha }}" -t "$IMAGE:latest" .
-          docker push "$IMAGE:${{ github.sha }}"
-          docker push "$IMAGE:latest"
-
-      # === 스토리지(PVC) 먼저 적용 ===
-      - name: Apply PVC
-        run: |
-          kubectl apply -n "$NAMESPACE" -f K8s/nocap-model-pvc.yaml
-          for i in {1..60}; do
-            phase=$(kubectl get pvc nocap-model-pvc -n "$NAMESPACE" -o jsonpath='{.status.phase}' 2>/dev/null || echo "Pending")
-            echo "PVC phase: $phase"
-            [ "$phase" = "Bound" ] && break
-            sleep 5
-          done
-          [ "$phase" = "Bound" ] || (echo "PVC not Bound" && exit 1)
-
-      # === 서비스/디플로이먼트 적용 ===
-      - name: Apply manifests
-        run: |
-          kubectl apply -n "$NAMESPACE" -f /mnt/data/service.yaml
-          kubectl apply -n "$NAMESPACE" -f /mnt/data/deployment.yaml
-
-      # === 최신 이미지로 롤아웃 ===
-      - name: Set image & rollout
-        run: |
-          kubectl -n "$NAMESPACE" set image deploy/"$DEPLOYMENT" "$DEPLOYMENT"="$IMAGE:${{ github.sha }}"
-          kubectl -n "$NAMESPACE" rollout status deploy/"$DEPLOYMENT" --timeout=600s
+          echo "✅ Pushed: $IMAGE_FASTAPI:latest"
