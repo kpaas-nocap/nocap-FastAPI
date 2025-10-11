@@ -3,9 +3,9 @@ version: '3.9'
 services:
   nocap-fastapi:
     build: .
-    image: nocap-fastapi:latest
+    image:  ${REGISTRY_HOST}/${NAMESPACE}/${REPO}:${TAG}
     container_name: fastapi-container
     ports:
-      - "80:80"
-      - "8000:80"
+      - "80:8000"
+      - "8000:8000"
     restart: unless-stopped

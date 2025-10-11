@@ -5,25 +5,59 @@ on:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-    env:
-      IMAGE: ${{ secrets.NCR_REGISTRY }}/${{ secrets.NCR_REPO_FASTAPI }}
-      NAMESPACE: nocap
-      DEPLOYMENT: nocap-fastapi
     steps:
       - uses: actions/checkout@v4
 
-      - name: Docker login (NCR)
+      - name: Docker login NCR
         run: |
-          echo "${{ secrets.NCR_PASSWORD }}" | docker login \
-            ${{ secrets.NCR_REGISTRY }} \
-            -u "${{ secrets.NCR_USERNAME }}" --password-stdin
+          echo "${{ secrets.NCR_PASSWORD }}" | docker login ${{ secrets.NCR_REGISTRY }} -u "${{ secrets.NCR_USERNAME }}" --password-stdin
 
-      - name: Build & push FastAPI image
+      - name: Build and push
         run: |
-          set -euxo pipefail
-          docker build -t $IMAGE:latest .
+          IMAGE=${{ secrets.NCR_REGISTRY }}/${{ secrets.NCR_REPO_FASTAPI }}
+          docker build -t $IMAGE:latest -t $IMAGE:${{ github.sha }} .
           docker push $IMAGE:latest
+          docker push $IMAGE:${{ github.sha }}
 
-      - name: Print pushed image tags
+      - uses: azure/setup-kubectl@v4
+
+      - name: Write kubeconfig
         run: |
-          echo "✅ Pushed: $IMAGE:latest"
+          mkdir -p $HOME/.kube
+          echo "${{ secrets.KUBE_CONFIG }}" > $HOME/.kube/config
+
+      - name: Ensure namespace and imagePullSecret
+        run: |
+          kubectl create namespace nocap --dry-run=client -o yaml | kubectl apply -f -
+          kubectl -n nocap delete secret ncr-cred --ignore-not-found
+          kubectl -n nocap create secret docker-registry ncr-cred \
+            --docker-server=${{ secrets.NCR_REGISTRY }} \
+            --docker-username=${{ secrets.NCR_USERNAME }} \
+            --docker-password=${{ secrets.NCR_PASSWORD }}
+
+      - name: Apply PVC
+        run: |
+          kubectl -n nocap apply -f K8s/nocap-model-pvc.yaml
+
+      - name: Wait for PVC
+        run: |
+          for i in {1..30}; do
+            PHASE=$(kubectl -n nocap get pvc nocap-model-pvc -o jsonpath='{.status.phase}' 2>/dev/null || true)
+            echo "PVC phase: ${PHASE:-<none>}"
+            [ "$PHASE" = "Bound" ] && exit 0
+            sleep 5
+          done
+          kubectl -n nocap describe pvc nocap-model-pvc || true
+          kubectl describe pv nocap-model-pvc || true
+          exit 1
+
+      - name: Apply FastAPI manifests
+        run: |
+          kubectl apply -f K8s/service.yaml
+          kubectl apply -f K8s/deployment.yaml
+
+      - name: Rollout FastAPI
+        run: |
+          IMAGE=${{ secrets.NCR_REGISTRY }}/${{ secrets.NCR_REPO_FASTAPI }}:${{ github.sha }}
+          kubectl -n nocap set image deploy/nocap-fastapi nocap-fastapi=$IMAGE
+          kubectl -n nocap rollout status deploy/nocap-fastapi --timeout=300s

@@ -5,7 +5,7 @@ from typing import List, Optional, Dict
 
 from app.news_analyzer import analyze_and_summarize
 
-app = FastAPI(title="뉴스 기사 유사도 분석 및 요약 API", version="1.0.0")
+app = FastAPI(root_path="/fastapi", title="뉴스 기사 유사도 분석 및 요약 API", version="1.0.0")
 
 # CORS 설정
 app.add_middleware(
