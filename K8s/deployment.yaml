@@ -29,19 +29,88 @@ spec:
         runAsNonRoot: true
         runAsUser: 10001
         fsGroup: 10001
+      volumes:
+        - name: hf-models
+          persistentVolumeClaim:
+            claimName: nocap-model-pvc
+        - name: tmp-vol
+          emptyDir: { }
       initContainers:
-        - name: fix-model-perms
-          image: alpine:3.20
-          command: [ "sh", "-c", "chmod -R a+rX /app/models || true" ]
+        - name: huggingface-model
+          image: python:3.11-slim
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "2Gi"
           volumeMounts:
             - name: hf-models
               mountPath: /app/models
+            - name: tmp-vol
+              mountPath: /tmp
+
+          env:
+            - name: HF_HUB_ENABLE_HF_XET
+              value: "0"
+            - name: HF_HOME
+              value: /tmp/huggingface
+            - name: TRANSFORMERS_CACHE
+              value: /tmp/huggingface/transformers
+            - name: HF_HUB_DISABLE_TELEMETRY
+              value: "1"
+          command: ["/bin/sh","-lc"]
+          args:
+            - |
+              set -euo pipefail
+              # 캐시/작업 디렉토리 보장
+              mkdir -p /tmp/huggingface/transformers /tmp/pkgs /app/models
+              chmod -R 0777 /tmp/huggingface || true
+              # 비루트 설치 경로 사용
+              python -m pip install --no-cache-dir --target /tmp/pkgs "huggingface_hub>=0.23.0"
+              PYTHONPATH=/tmp/pkgs python - <<'PY'
+              import os, glob, shutil
+              from huggingface_hub import snapshot_download
+              
+              base = os.environ.get("MODELS_PATH","/app/models")
+              targets = [
+                ("sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+                 os.path.join(base, "paraphrase-multilingual-MiniLM-L12-v2")),
+                ("Leo97/KoELECTRA-small-v3-modu-ner",
+                 os.path.join(base, "KoELECTRA-small-v3-modu-ner")),
+              ]
+              
+              def has_weights(path: str) -> bool:
+                pats = ["pytorch_model.bin","model.safetensors","tf_model.h5","model.ckpt.index","flax_model.msgpack"]
+                return any(glob.glob(os.path.join(path,"**",p), recursive=True) for p in pats)
+              
+              token = os.environ.get("HUGGINGFACE_HUB_TOKEN")
+              for repo_id, local_dir in targets:
+                  os.makedirs(local_dir, exist_ok=True)
+                  if has_weights(local_dir):
+                      print(f"✓ weights found, skip: {local_dir}")
+                      continue
+                  if os.listdir(local_dir):
+                      print(f"! cleanup {local_dir}")
+                      shutil.rmtree(local_dir); os.makedirs(local_dir, exist_ok=True)
+                  print(f"↓ downloading {repo_id} -> {local_dir}")
+                  snapshot_download(
+                    repo_id=repo_id,
+                    local_dir=local_dir,
+                    local_dir_use_symlinks=False,
+                    token=token
+                  )
+                  assert has_weights(local_dir), f"weights missing after download: {local_dir}"
+                  print(f"✓ done: {local_dir}")
+              print("✅ all models ready.")
+              PY
       containers:
         - name: nocap-fastapi
           image: no-cap.kr.ncr.ntruss.com/nocap-fastapi:latest
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           ports:
-            - containerPort: 80
+            - containerPort: 8000
           env:
             - name: OPENAI_API_KEY
               valueFrom:
@@ -58,6 +127,14 @@ spec:
               value: "false"
             - name: PYTHONUNBUFFERED
               value: "1"
+            - name: HF_HUB_ENABLE_HF_XET
+              value: "0"
+            - name: HF_HOME
+              value: /tmp/huggingface
+            - name: TRANSFORMERS_CACHE
+              value: /tmp/huggingface/transformers
+            - name: HF_HUB_DISABLE_TELEMETRY
+              value: "1"
           resources:
             requests:
               cpu: "250m"
@@ -70,27 +147,40 @@ spec:
           volumeMounts:
             - name: hf-models
               mountPath: /app/models
+            - name: tmp-vol
+              mountPath: /tmp
+          command: [ "python","-m","uvicorn" ]
+          args:
+            - "app.main:app"
+            - "--host"
+            - "0.0.0.0"
+            - "--port"
+            - "8000"
+            - "--proxy-headers"
+            - "--forwarded-allow-ips"
+            - "*"
           startupProbe:
-            tcpSocket:
-              port: 80
-            timeoutSeconds: 3
+            httpGet:
+              path: /health
+              port: 8000
             periodSeconds: 5
-            failureThreshold: 120
+            timeoutSeconds: 3
+            failureThreshold: 60
+
           readinessProbe:
-            tcpSocket:
-              port: 80
-            initialDelaySeconds: 25
-            timeoutSeconds: 3
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
             periodSeconds: 5
-            failureThreshold: 30
-          livenessProbe:
-            tcpSocket:
-              port: 80
-            initialDelaySeconds: 120
-            timeoutSeconds: 3
-            periodSeconds: 10
+            timeoutSeconds: 2
             failureThreshold: 3
-      volumes:
-        - name: hf-models
-          persistentVolumeClaim:
-            claimName: nocap-model-pvc
+
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
