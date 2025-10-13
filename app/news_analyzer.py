@@ -8,14 +8,47 @@ from openai import OpenAI
 load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-model = SentenceTransformer("sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
+# Block Storage 경로 설정
+MODELS_BASE_PATH = os.getenv("MODELS_PATH", "/app/models")
+
+# 모델 경로 정의
+SENTENCE_TRANSFORMER_PATH = os.path.join(MODELS_BASE_PATH, "paraphrase-multilingual-MiniLM-L12-v2")
+NER_MODEL_PATH = os.path.join(MODELS_BASE_PATH, "KoELECTRA-small-v3-modu-ner")
+
+# Sentence Transformer 모델 로딩
+print(f"Loading Sentence Transformer from: {SENTENCE_TRANSFORMER_PATH}")
+if os.path.exists(SENTENCE_TRANSFORMER_PATH):
+    # Block Storage에서 로드
+    model = SentenceTransformer(SENTENCE_TRANSFORMER_PATH)
+    print("✓ Sentence Transformer loaded from block storage")
+else:
+    # 없으면 다운로드 후 저장
+    print("Downloading Sentence Transformer...")
+    model = SentenceTransformer("sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
+    os.makedirs(SENTENCE_TRANSFORMER_PATH, exist_ok=True)
+    model.save(SENTENCE_TRANSFORMER_PATH)
+    print(f"✓ Sentence Transformer downloaded and saved to {SENTENCE_TRANSFORMER_PATH}")
 
 _ = model.encode(["프리로딩 테스트"], convert_to_tensor=True)
 
-# 한국어 NER 파이프라인 (Leo97/KoELECTRA-small-v3-modu-ner)
-ner_model_name = "Leo97/KoELECTRA-small-v3-modu-ner"
-tokenizer = AutoTokenizer.from_pretrained(ner_model_name)
-ner_model = AutoModelForTokenClassification.from_pretrained(ner_model_name)
+# NER 모델 로딩
+print(f"Loading NER model from: {NER_MODEL_PATH}")
+if os.path.exists(NER_MODEL_PATH):
+    # Block Storage에서 로드
+    tokenizer = AutoTokenizer.from_pretrained(NER_MODEL_PATH)
+    ner_model = AutoModelForTokenClassification.from_pretrained(NER_MODEL_PATH)
+    print("✓ NER model loaded from block storage")
+else:
+    # 없으면 다운로드 후 저장
+    print("Downloading NER model...")
+    ner_model_name = "Leo97/KoELECTRA-small-v3-modu-ner"
+    tokenizer = AutoTokenizer.from_pretrained(ner_model_name)
+    ner_model = AutoModelForTokenClassification.from_pretrained(ner_model_name)
+
+    os.makedirs(NER_MODEL_PATH, exist_ok=True)
+    tokenizer.save_pretrained(NER_MODEL_PATH)
+    ner_model.save_pretrained(NER_MODEL_PATH)
+    print(f"✓ NER model downloaded and saved to {NER_MODEL_PATH}")
 
 ner_pipeline = pipeline(
     "token-classification",
