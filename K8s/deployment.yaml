@@ -123,7 +123,7 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: app-secrets
-                  key: X-API-KEY
+                  key: X_API_KEY
             - name: OMP_NUM_THREADS
               value: "1"
             - name: MKL_NUM_THREADS
