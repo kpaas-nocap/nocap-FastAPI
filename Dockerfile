@@ -11,4 +11,4 @@ RUN python -m nltk.downloader punkt punkt_tab -d /usr/local/share/nltk_data
 
 COPY . .
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--log-level", "debug"]
