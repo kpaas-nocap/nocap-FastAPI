@@ -157,7 +157,8 @@ def _similarity_from_sentences(main_embeddings, article_embeddings):
 
 # 유사도 점수 + GPT 요약
 def generate_comparative_summary(main_content, compare_content, plan="NORMAL"):
-    gpt_model = "gpt-4o-mini" if plan.upper() == "FREE" else "gpt-4o"
+    plan_upper = (plan or "NORMAL").upper()
+    gpt_model = "gpt-4o" if plan_upper == "PREMIUM" else "gpt-4o-mini"
     # 일반(NORMAL) 유저 : gpt-4o-mini
     # 프리미엄(PREMIUM) 유저 : gpt-4o
 
@@ -194,26 +195,11 @@ def analyze_and_summarize(dto, threshold=0.5):
     credible_main = extract_credible_phrases(main_sentences)
 
     if not main_sentences:
-        comparison_results = []
-        for article in dto.get("newsDtos", []):
-            comparison_results.append({
-                "newsWithSimilarityDto": {
-                    "similarity": 0.0,
-                    "newsDto": {
-                        "url": article.get("url", ""),
-                        "title": article.get("title", ""),
-                        "date": article.get("date", ""),
-                        "phrases": [],
-                        "content": article.get("content", "")
-                    }
-                },
-                "comparison": None
-            })
-        comparison_results.sort(key=lambda x: x["newsWithSimilarityDto"]["similarity"], reverse=True)
         return {
             "category": dto.get("category", ""),
+            "plan": plan,
             "mainNewsDto": {**main_news, "phrases": credible_main, "content": cleaned_main_content},
-            "newsComparisonDtos": comparison_results
+            "newsComparisonDtos": []
         }
 
     main_embeddings = model.encode(main_sentences, convert_to_tensor=True)
@@ -224,19 +210,21 @@ def analyze_and_summarize(dto, threshold=0.5):
         cleaned_article_content = _clean_content(article.get("content") or "")
         article_sentences = _to_sentences(cleaned_article_content)
 
-        credible_article = extract_credible_phrases(article_sentences)
         article_embeddings = model.encode(article_sentences, convert_to_tensor=True)
         similarity = _similarity_from_sentences(main_embeddings, article_embeddings)
 
-        # GPT 비교 요약은 유사도 0.5 이상일 때만 실행
-        comparison_text = None
-        if similarity >= threshold:
-            try:
-                comparison_text = generate_comparative_summary(
-                    main_news.get("content", ""), article.get("content", "")
-                )
-            except Exception as e:
-                comparison_text = f"요약 실패: {str(e)}"
+        # threshold(0.5) 이하면 결과에서 제외
+        if similarity < threshold:
+            continue
+
+        credible_article = extract_credible_phrases(article_sentences)
+
+        try:
+            comparison_text = generate_comparative_summary(
+                main_news.get("content", ""), article.get("content", "")
+            )
+        except Exception as e:
+            comparison_text = f"요약 실패: {str(e)}"
 
         comparison_results.append({
             "newsWithSimilarityDto": {
